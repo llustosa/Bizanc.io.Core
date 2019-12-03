@@ -18,6 +18,8 @@ using System.Collections.Concurrent;
 using System.Threading.Channels;
 using Bizanc.io.Matching.Core.Domain.Immutable;
 using Serilog;
+using System.IO;
+using CsvHelper;
 
 namespace Bizanc.io.Matching.Core.Domain
 {
@@ -1058,20 +1060,71 @@ namespace Bizanc.io.Matching.Core.Domain
             PushWithdrawal(wd);
         }
 
+
+        class BData
+        {
+            public string Hash { get; set; }
+
+            public string PreviousHash { get; set; }
+
+            public long Depth { get; set; }
+
+            public DateTime Timestamp { get; set; }
+
+            public long TimestampTicks { get; set; }
+            public long Nonce { get; set; }
+            public string Miner { get; set; }
+
+            public int Transactions { get; set; }
+
+            public int Difficulty { get; set; }
+        }
+        FileStream stream;
+        StreamWriter writeFile;
+        CsvWriter csv;
         public async Task Message(IPeer sender, BlockResponse blockResponse)
         {
+            if (stream == null)
+            {
+                stream = new FileStream("Blocks.csv", FileMode.Create);
+                writeFile = new StreamWriter(stream);
+                csv = new CsvWriter(writeFile);
+                csv.WriteHeader(typeof(BData));
+            }
+
             Log.Debug("Received block message");
             foreach (var block in blockResponse.Blocks)
             {
-                if (await ProcessBlock(block))
+                await csv.NextRecordAsync();
+                csv.WriteRecord(new BData
                 {
-                    Log.Information("Received newer block");
-                    Notify(block, sender.Id);
-                }
+                    Depth = block.Header.Depth,
+                    Hash = block.HashStr,
+                    Miner = block.Header.Depth > 0 ? block.Transactions.First().Outputs[0].Wallet : "",
+                    Nonce = block.Header.Nonce,
+                    PreviousHash = block.PreviousHashStr,
+                    Timestamp = block.Timestamp,
+                    TimestampTicks = block.TimeStampTicks,
+                    Transactions = block.Transactions.Count(),
+                    Difficulty = block.Header.Difficult
+                });
+
+                // if (await ProcessBlock(block))
+                // {
+                //     Log.Information("Received newer block");
+                //     Notify(block, sender.Id);
+                // }
             }
 
             if (blockResponse.End)
             {
+                await csv.FlushAsync();
+                await writeFile.FlushAsync();
+                await stream.FlushAsync();
+                stream.Close();
+
+                await stream.FlushAsync();
+                stream.Close();
                 sender.InitSource.SetResult(null);
                 synchWatch.Start();
             }
@@ -1292,10 +1345,10 @@ namespace Bizanc.io.Matching.Core.Domain
                 await commitLocker.EnterWriteLock();
                 if (of.Timestamp < chain.GetLastBlockTime() || of.Timestamp > DateTime.Now.ToUniversalTime())
                 {
-                    Log.Error("Offer with invalid timestamp "+ of.Timestamp);
+                    Log.Error("Offer with invalid timestamp " + of.Timestamp);
                     return false;
                 }
-                    
+
 
                 if (!await chain.Contains(of) && await chain.Append(of))
                 {
@@ -1839,6 +1892,49 @@ namespace Bizanc.io.Matching.Core.Domain
                 await GetBlocks(blocksToSend.Last().Header.Depth, sender);
             else
                 sender.SendMessage(new BlockResponse() { End = true });
+        }
+
+        public async Task<Channel<Block>> GetBlocksStream(long offSet)
+        {
+            var result = Channel.CreateUnbounded<Block>();
+
+            var blockResponse = new BlockResponse();
+            var chainBlocks = chain.GetBlocksOldToNew();
+            Channel<Block> dbBlocks = null;
+            List<Block> blocksToSend = new List<Block>();
+
+            try
+            {
+                await persistLock.EnterReadLock();
+
+                blocksToSend = chainBlocks.Where(b => b.Header.Depth >= offSet).OrderBy(b => b.Header.Depth).ToList();
+
+                if (blocksToSend.Count > 0 && offSet < blocksToSend.First().Header.Depth)
+                {
+                    dbBlocks = (await blockRepository.Get(offSet));
+                }
+            }
+            finally
+            {
+                persistLock.ExitReadLock();
+            }
+
+            if (dbBlocks != null)
+            {
+                while (await dbBlocks.Reader.WaitToReadAsync())
+                {
+                    await result.Writer.WriteAsync(await dbBlocks.Reader.ReadAsync());
+                }
+            }
+
+            foreach (var item in blocksToSend)
+            {
+                await result.Writer.WriteAsync(item);
+            }
+
+            result.Writer.Complete();
+
+            return result;
         }
 
         private async void PushTransaction(Transaction tx)

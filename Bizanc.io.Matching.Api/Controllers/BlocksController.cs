@@ -5,6 +5,8 @@ using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
 using Bizanc.io.Matching.Core.Domain;
 using System.Web;
+using System.IO;
+using CsvHelper;
 
 namespace Bizanc.io.Matching.Api.Controllers
 {
@@ -62,6 +64,25 @@ namespace Bizanc.io.Matching.Api.Controllers
         public async Task<IEnumerable<Block>> ListFromDepth([FromRoute]long depth)
         {
             return await repository.ListBlocksFromDepth(depth);
+        }
+
+
+        [HttpGet("csv")]
+        public async Task<IActionResult> MyExportAction()
+        {
+            var result = await this.repository.GetBlocksStream(-1);
+
+            var stream = new MemoryStream();
+            var writeFile = new StreamWriter(stream);
+            var csv = new CsvWriter(writeFile);
+            
+            while (await result.Reader.WaitToReadAsync())
+            {
+                csv.WriteRecord(result.Reader.ReadAsync());    
+            }
+
+            stream.Position = 0; //reset stream
+            return File(stream, "application/octet-stream", "Blocks.csv");
         }
     }
 }

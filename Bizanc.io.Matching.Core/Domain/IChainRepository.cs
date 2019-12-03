@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Threading.Channels;
 using System.Threading.Tasks;
 
 namespace Bizanc.io.Matching.Core.Domain
@@ -38,6 +39,7 @@ namespace Bizanc.io.Matching.Core.Domain
 
         Task<IList<Block>> ListBlocks(int size);
         Task<Block> GetBlockByHash(string hash);
+        Task<Channel<Block>> GetBlocksStream(long offSet);
         Task<IList<Block>> ListBlocksFromDepth(long depth);
 
         Task<IList<Trade>> ListTradesAscending(string asset, string reference, DateTime from);
