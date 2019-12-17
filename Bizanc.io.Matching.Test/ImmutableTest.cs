@@ -11,27 +11,27 @@ namespace Bizanc.io.Matching.Test
 {
     public class ImmutableTest
     {
-        [Fact]
-        public void Test()
-        {
+        // [Fact]
+        // public void Test()
+        // {
 
-            var imutDic = new Dictionary<Guid, object>().ToImmutableDictionary();
-            var dic = new Dictionary<Guid, object>();
+        //     var imutDic = new Dictionary<Guid, object>().ToImmutableDictionary();
+        //     var dic = new Dictionary<Guid, object>();
 
-            var sw = new Stopwatch();
-            sw.Start();
+        //     var sw = new Stopwatch();
+        //     sw.Start();
 
-            for (int i = 0; i < 10000000; i++)
-            {
-                imutDic = imutDic.Add(Guid.NewGuid(), i);
-                // dic.Add(Guid.NewGuid(), i);
-            }
+        //     for (int i = 0; i < 10000000; i++)
+        //     {
+        //         imutDic = imutDic.Add(Guid.NewGuid(), i);
+        //         // dic.Add(Guid.NewGuid(), i);
+        //     }
 
-            sw.Stop();
-            sw.Elapsed.ToString();
+        //     sw.Stop();
+        //     sw.Elapsed.ToString();
 
 
 
-        }
+        // }
     }
 }
