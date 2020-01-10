@@ -71,6 +71,8 @@ namespace Bizanc.io.Matching.Core.Domain
 
         private Channel<Chain> chainUpdateStream;
 
+        private Channel<string> peerListResponseStream;
+
         private bool hasChainListner = false;
 
         private IConnector connector;
@@ -146,6 +148,7 @@ namespace Bizanc.io.Matching.Core.Domain
             offerStream = Channel.CreateUnbounded<Offer>();
             withdrawalStream = Channel.CreateUnbounded<Withdrawal>();
             PersistStream = Channel.CreateUnbounded<Chain>();
+            peerListResponseStream = Channel.CreateUnbounded<string>();
 
             var persistPoint = (await blockRepository.GetPersistInfo()).OrderBy(p => p.TimeStamp).LastOrDefault();
 
@@ -262,6 +265,7 @@ namespace Bizanc.io.Matching.Core.Domain
             ProcessTransactions();
             ProcessWithdrawal();
             ProcessPersist();
+            ProcessPeerListResponse();
 
 
             var (deposits, withdraws) = await connector.Start(await depositRepository.GetLastEthBlockNumber(), await withdrawInfoRepository.GetLastEthBlockNumber(), await depositRepository.GetLastBtcBlockNumber(), await withdrawInfoRepository.GetLastBtcBlockNumber());
@@ -415,6 +419,25 @@ namespace Bizanc.io.Matching.Core.Domain
             }
 
             await Disconnect(peer);
+        }
+
+        public async void ProcessPeerListResponse()
+        {
+            while (await peerListResponseStream.Reader.WaitToReadAsync())
+            {
+                var ad = await peerListResponseStream.Reader.ReadAsync();
+
+                if (peerDictionary.Count <= 200)
+                {
+                    if (!peerDictionary.Values.Any(p => p.Equal(ad)))
+                    {
+                        Log.Information("connecting to peer from peerlist response: " + ad);
+                        var peer = await peerListener.Connect(ad);
+                        if (peer != null)
+                            Connect(peer);
+                    }
+                }
+            }
         }
 
         public ChannelReader<Chain> GetChainStream()
@@ -997,17 +1020,7 @@ namespace Bizanc.io.Matching.Core.Domain
                 return;
 
             foreach (var ad in listResponse.Peers)
-            {
-                if (!peerDictionary.Values.Any(p => p.Equal(ad)))
-                {
-                    Log.Information("connecting to peer from peerlist response: " + ad);
-                    var peer = await peerListener.Connect(ad);
-                    if (peer != null)
-                        Connect(peer);
-                }
-            }
-
-            Log.Information("Finished trying new peers from: " + sender.Address);
+                await peerListResponseStream.Writer.WriteAsync(ad);
         }
 
         public async void Message(IPeer sender, TransactionPoolRequest txPool)
@@ -1292,10 +1305,10 @@ namespace Bizanc.io.Matching.Core.Domain
                 await commitLocker.EnterWriteLock();
                 if (of.Timestamp < chain.GetLastBlockTime() || of.Timestamp > DateTime.Now.ToUniversalTime())
                 {
-                    Log.Error("Offer with invalid timestamp "+ of.Timestamp);
+                    Log.Error("Offer with invalid timestamp " + of.Timestamp);
                     return false;
                 }
-                    
+
 
                 if (!await chain.Contains(of) && await chain.Append(of))
                 {
