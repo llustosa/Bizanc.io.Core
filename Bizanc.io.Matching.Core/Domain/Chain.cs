@@ -310,7 +310,7 @@ namespace Bizanc.io.Matching.Core.Domain
                 Asset = "BIZ",
                 Outputs = new List<TransactionOutput>(){
                                 new TransactionOutput{
-                                    Wallet = "y4j4EmPLy7oMBeQEdfXJJAqwWdwgpPGAxezDWNGzFqqtqjKpn", //TODO Change Pre Mining Wallet
+                                    Wallet = "T7CA4uXa6Mpwfq3SCDZaLzW9ApD6xrNj7dAP4RRjxvKdH1JBd", //TODO Change Pre Mining Wallet
                                     Size = 1578960000
                                 }
                             }

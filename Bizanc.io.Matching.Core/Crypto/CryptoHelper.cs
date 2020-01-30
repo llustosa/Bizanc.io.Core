@@ -26,9 +26,6 @@ namespace Bizanc.io.Matching.Core.Crypto
                     pub[rawPub.Length + i] = check[i];
                 
                 var pbc = Base58.Bitcoin.Encode(pub);
-
-                Console.WriteLine(pbc);
-                Console.WriteLine(pvt);
                 return (pvt, pbc);
             }
         }

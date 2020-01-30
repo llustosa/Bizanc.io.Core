@@ -36,6 +36,8 @@ namespace Bizanc.io.Matching.App
         public string MinerAddress { get; set; }
 
         public string RavenDB { get; set; }
+
+        public bool Broadcast { get; set; } = false;
     }
     class Program
     {
@@ -85,6 +87,28 @@ namespace Bizanc.io.Matching.App
 
             StartApi(miner, conf.ApiEndpoint);
             await miner.StartListener();
+
+            await Task.Delay(1000 * 60 * 2);
+
+            if (conf.Broadcast)
+            {
+                while (true)
+                {
+                    var tx = new Transaction();
+                    tx.Timestamp = DateTime.Now;
+                    tx.Version = "1";
+                    tx.Wallet = "T7CA4uXa6Mpwfq3SCDZaLzW9ApD6xrNj7dAP4RRjxvKdH1JBd";
+                    tx.Asset = "BIZ";
+                    tx.Outputs.Add(new TransactionOutput()
+                    {
+                        Wallet = CryptoHelper.CreateKeyPair().Item2,
+                        Size = 0.1m
+                    });
+                    tx.Signature = CryptoHelper.Sign(tx.ToString(), "EtHepiyqfeRmJdo8B3jYouJcFqzAdS6eQDvbguRnmMVM");
+
+                    miner.AppendTransactionAsync(tx);
+                }
+            }
 
             await Task.Delay(Timeout.Infinite);
         }
